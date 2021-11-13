@@ -1,5 +1,6 @@
 defmodule DirwalkTest do
   use ExUnit.Case
+  doctest Dirwalk
 
   test "walks depth first" do
     assert {{"testdirs", ["dogs", "cats"], []}, next} = Dirwalk.walk("testdirs")

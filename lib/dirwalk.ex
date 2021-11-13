@@ -1,17 +1,36 @@
 defmodule Dirwalk do
   @moduledoc """
-  Documentation for `Dirwalk`.
+  A simple module to help traverse directories.
   """
 
+  @type path :: String.t()
+  @type dirs :: [String.t()]
+  @type files :: [String.t()]
+  @type dirlist :: {path, dirs, files}
+  @type opts :: []
+
   @doc """
-  Hello world.
+  `walk` takes a path startpoint and lazily traverses directories from that root.
+
+  It returns a tuple, consisting of a triple of `{path, directories, files}`, and a `next` function
+  to be invoked when the next traversal needs to be done. When there are no more directories
+  to handle, `:done` is returned.
+
+  The default behaviour is a depth-first, topdown walk.
+
+  By default errors are silently ignored - see options.
+
+  Options:
+  - `:on_error`: optional callback that is invoked with `{path, error_reason}` when an error occurs
+  - `:search`: type of search, unless `:breadth` is specified it's depth-first
 
   ## Examples
 
-      iex> Dirwalk.hello()
-      :world
+      iex> {{"testdirs", ["dogs", "cats"], []}, next} = Dirwalk.walk("testdirs")
+      iex> {{"testdirs/dogs", ["wild", "domestic"], []}, _next} = next.()
 
   """
+  @spec walk(path, opts) :: {dirlist, (() -> any())} | :done
   def walk(path \\ __DIR__, opts \\ []) do
     on_error = Keyword.get(opts, :on_error, & &1)
     search = Keyword.get(opts, :search)
