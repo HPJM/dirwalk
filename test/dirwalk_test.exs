@@ -11,4 +11,17 @@ defmodule DirwalkTest do
     assert {{"testdirs/cats/domestic", [], ["cat.txt"]}, next} = next.()
     assert :done = next.()
   end
+
+  test "by default ignores errors" do
+    assert {{"non_existent_dir", [], []}, next} = Dirwalk.walk("non_existent_dir")
+    assert :done = next.()
+  end
+
+  test "invokes on_error with any errors encountered" do
+    {:ok, agent} = Agent.start(fn -> [] end)
+
+    Dirwalk.walk("non_existent_dir", on_error: fn error -> Agent.update(agent, &[error | &1]) end)
+
+    assert Agent.get(agent, & &1) == [{"non_existent_dir", :enoent}]
+  end
 end
