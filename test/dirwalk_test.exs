@@ -12,6 +12,17 @@ defmodule DirwalkTest do
     assert :done = next.()
   end
 
+  test "walks breadth first" do
+    assert {{"testdirs", ["dogs", "cats"], []}, next} = Dirwalk.walk("testdirs", search: :breadth)
+    assert {{"testdirs/dogs", ["wild", "domestic"], []}, next} = next.()
+    assert {{"testdirs/cats", ["wild", "domestic"], []}, next} = next.()
+    assert {{"testdirs/dogs/wild", [], ["coyote.txt", "wolf.txt"]}, next} = next.()
+    assert {{"testdirs/dogs/domestic", [], ["dog.txt"]}, next} = next.()
+    assert {{"testdirs/cats/wild", [], ["tiger.txt", "lion.txt"]}, next} = next.()
+    assert {{"testdirs/cats/domestic", [], ["cat.txt"]}, next} = next.()
+    assert :done = next.()
+  end
+
   test "by default ignores errors" do
     assert {{"non_existent_dir", [], []}, next} = Dirwalk.walk("non_existent_dir")
     assert :done = next.()

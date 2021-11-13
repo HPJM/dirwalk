@@ -14,10 +14,11 @@ defmodule Dirwalk do
   """
   def walk(path \\ __DIR__, opts \\ []) do
     on_error = Keyword.get(opts, :on_error, & &1)
-    do_walk(path, [], on_error)
+    search = Keyword.get(opts, :search)
+    do_walk(path, [], on_error, search)
   end
 
-  defp do_walk(path, remaining_dirs, on_error) do
+  defp do_walk(path, remaining_dirs, on_error, search) do
     {dirs, files} =
       case partition_files(path) do
         {:ok, results} ->
@@ -30,7 +31,9 @@ defmodule Dirwalk do
 
     fileset = {path, dirs, files}
 
-    {fileset, fn -> next(fileset, get_siblings(dirs, path) ++ remaining_dirs, on_error) end}
+    remaining_dirs = dirs |> get_siblings(path) |> build_remaining_dirs(remaining_dirs, search)
+
+    {fileset, fn -> next(fileset, remaining_dirs, on_error, search) end}
   end
 
   defp partition_files(path) do
@@ -46,17 +49,19 @@ defmodule Dirwalk do
   end
 
   defp get_siblings([], _path), do: []
-  defp get_siblings(dirs, path), do: dirs |> tl |> Enum.map(&Path.join(path, &1))
+  defp get_siblings(dirs, path), do: dirs |> Enum.map(&Path.join(path, &1))
 
-  defp next({_path, [], _files}, [], _on_error), do: :done
-
-  defp next({_path, [], _files}, [next_dir | remaining_dirs], on_error) do
-    do_walk(next_dir, remaining_dirs, on_error)
+  defp build_remaining_dirs(siblings, remaining_dirs, :breadth) do
+    remaining_dirs ++ siblings
   end
 
-  defp next({path, [dir | _dirs], _files}, remaining_dirs, on_error) do
-    path
-    |> Path.join(dir)
-    |> do_walk(remaining_dirs, on_error)
+  defp build_remaining_dirs(siblings, remaining_dirs, _search) do
+    siblings ++ remaining_dirs
+  end
+
+  defp next({_path, _dirs, _files}, [], _on_error, search), do: :done
+
+  defp next({_path, _dirs, _files}, [next_dir | remaining_dirs], on_error, search) do
+    do_walk(next_dir, remaining_dirs, on_error, search)
   end
 end
