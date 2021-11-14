@@ -38,8 +38,8 @@ defmodule DirwalkTest do
   end
 
   test "by default ignores errors" do
-    assert {{"non_existent_dir", [], []}, next} = Dirwalk.walk("non_existent_dir")
-    assert :done = next.()
+    assert :done = Dirwalk.walk("non_existent_dir")
+    assert :done = Dirwalk.walk("non_existent_dir", topdown: false)
   end
 
   test "invokes on_error with any errors encountered" do

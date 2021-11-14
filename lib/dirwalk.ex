@@ -46,33 +46,43 @@ defmodule Dirwalk do
   defp do_walk_bottom_up([], _on_error, cont), do: cont.()
 
   defp do_walk_bottom_up([path | remaining_dirs], on_error, cont) do
-    {dirs, files} = get_dirs_and_files(path, on_error)
+    case get_dirs_and_files(path, on_error) do
+      {:ok, {dirs, files}} ->
+        do_walk_bottom_up(get_siblings(dirs, path), on_error, fn ->
+          {{path, dirs, files},
+           fn ->
+             do_walk_bottom_up(remaining_dirs, on_error, cont)
+           end}
+        end)
 
-    do_walk_bottom_up(get_siblings(dirs, path), on_error, fn ->
-      {{path, dirs, files},
-       fn ->
-         do_walk_bottom_up(remaining_dirs, on_error, cont)
-       end}
-    end)
+      :error ->
+        do_walk_bottom_up(remaining_dirs, on_error, cont)
+    end
   end
 
   defp do_walk([], _on_error, _search), do: :done
 
   defp do_walk([path | remaining_dirs], on_error, search) do
-    {dirs, files} = get_dirs_and_files(path, on_error)
-    remaining_dirs = dirs |> get_siblings(path) |> build_remaining_dirs(remaining_dirs, search)
+    case get_dirs_and_files(path, on_error) do
+      {:ok, {dirs, files}} ->
+        remaining_dirs =
+          dirs |> get_siblings(path) |> build_remaining_dirs(remaining_dirs, search)
 
-    {{path, dirs, files}, fn -> do_walk(remaining_dirs, on_error, search) end}
+        {{path, dirs, files}, fn -> do_walk(remaining_dirs, on_error, search) end}
+
+      :error ->
+        do_walk(remaining_dirs, on_error, search)
+    end
   end
 
   defp get_dirs_and_files(path, on_error) do
     case partition_files(path) do
       {:ok, results} ->
-        results
+        {:ok, results}
 
       {:error, reason} ->
         on_error.({path, reason})
-        {[], []}
+        :error
     end
   end
 
