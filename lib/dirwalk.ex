@@ -21,8 +21,9 @@ defmodule Dirwalk do
   By default errors are silently ignored - see options.
 
   Options:
-  - `:on_error`: optional callback that is invoked with `{path, error_reason}` when an error occurs
+  - `:on_error`: optional 1- or 2-arity callback that is invoked with either `path` and `error_reason` or a tuple of `{path, error_reason}` when an error occurs
   - `:search`: type of search, unless `:breadth` is specified it's depth-first
+  - `:topdown`: unless false, the traversal is topdown
 
   ## Examples
 
