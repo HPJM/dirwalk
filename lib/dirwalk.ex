@@ -34,7 +34,26 @@ defmodule Dirwalk do
   def walk(path \\ __DIR__, opts \\ []) do
     on_error = Keyword.get(opts, :on_error, & &1)
     search = Keyword.get(opts, :search)
-    do_walk([path], on_error, search)
+    topdown = !!Keyword.get(opts, :topdown, true)
+
+    if topdown do
+      do_walk([path], on_error, search)
+    else
+      do_walk_bottom_up([path], on_error, fn -> :done end)
+    end
+  end
+
+  defp do_walk_bottom_up([], _on_error, cont), do: cont.()
+
+  defp do_walk_bottom_up([path | remaining_dirs], on_error, cont) do
+    {dirs, files} = get_dirs_and_files(path, on_error)
+
+    do_walk_bottom_up(get_siblings(dirs, path), on_error, fn ->
+      {{path, dirs, files},
+       fn ->
+         do_walk_bottom_up(remaining_dirs, on_error, cont)
+       end}
+    end)
   end
 
   defp do_walk([], _on_error, _search), do: :done

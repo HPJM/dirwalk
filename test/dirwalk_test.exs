@@ -13,6 +13,19 @@ defmodule DirwalkTest do
     assert :done = next.()
   end
 
+  test "walks bottom-up if option given" do
+    assert {{"testdirs/dogs/wild", [], ["coyote.txt", "wolf.txt"]}, next} =
+             Dirwalk.walk("testdirs", topdown: false)
+
+    assert {{"testdirs/dogs/domestic", [], ["dog.txt"]}, next} = next.()
+    assert {{"testdirs/dogs", ["wild", "domestic"], []}, next} = next.()
+    assert {{"testdirs/cats/wild", [], ["tiger.txt", "lion.txt"]}, next} = next.()
+    assert {{"testdirs/cats/domestic", [], ["cat.txt"]}, next} = next.()
+    assert {{"testdirs/cats", ["wild", "domestic"], []}, next} = next.()
+    assert {{"testdirs", ["dogs", "cats"], []}, next} = next.()
+    assert :done = next.()
+  end
+
   test "walks breadth first" do
     assert {{"testdirs", ["dogs", "cats"], []}, next} = Dirwalk.walk("testdirs", search: :breadth)
     assert {{"testdirs/dogs", ["wild", "domestic"], []}, next} = next.()
