@@ -42,11 +42,21 @@ defmodule DirwalkTest do
     assert :done = Dirwalk.walk("non_existent_dir", topdown: false)
   end
 
-  test "invokes on_error with any errors encountered" do
+  test "invokes on_error/1 with any errors encountered" do
     {:ok, agent} = Agent.start(fn -> [] end)
 
     Dirwalk.walk("non_existent_dir", on_error: fn error -> Agent.update(agent, &[error | &1]) end)
 
     assert Agent.get(agent, & &1) == [{"non_existent_dir", :enoent}]
+  end
+
+  test "invokes on_error/2 with any errors encountered" do
+    {:ok, agent} = Agent.start(fn -> [] end)
+
+    Dirwalk.walk("non_existent_dir",
+      on_error: fn path, error -> Agent.update(agent, &["#{path}: #{error}" | &1]) end
+    )
+
+    assert Agent.get(agent, & &1) == ["non_existent_dir: enoent"]
   end
 end

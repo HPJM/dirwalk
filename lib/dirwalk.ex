@@ -81,7 +81,7 @@ defmodule Dirwalk do
         {:ok, results}
 
       {:error, reason} ->
-        on_error.({path, reason})
+        call_on_error(on_error, path, reason)
         :error
     end
   end
@@ -107,5 +107,13 @@ defmodule Dirwalk do
 
   defp build_remaining_dirs(siblings, remaining_dirs, _search) do
     siblings ++ remaining_dirs
+  end
+
+  defp call_on_error(on_error, path, reason) when is_function(on_error, 2) do
+    on_error.(path, reason)
+  end
+
+  defp call_on_error(on_error, path, reason) do
+    on_error.({path, reason})
   end
 end
