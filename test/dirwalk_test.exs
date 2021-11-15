@@ -5,7 +5,7 @@ defmodule DirwalkTest do
   @testdir "testdirs"
 
   test "walks depth first, top-down by default" do
-    assert {{"testdirs", ["dogs", "cats"], []}, next} = Dirwalk.walk(@testdir)
+    assert {{"testdirs", ["dogs", "cats", "felines"], []}, next} = Dirwalk.walk(@testdir)
     assert {{"testdirs/dogs", ["wild", "domestic"], []}, next} = next.()
     assert {{"testdirs/dogs/wild", [], ["coyote.txt", "wolf.txt"]}, next} = next.()
     assert {{"testdirs/dogs/domestic", [], ["dog.txt"]}, next} = next.()
@@ -24,12 +24,13 @@ defmodule DirwalkTest do
     assert {{"testdirs/cats/wild", [], ["tiger.txt", "lion.txt"]}, next} = next.()
     assert {{"testdirs/cats/domestic", [], ["cat.txt"]}, next} = next.()
     assert {{"testdirs/cats", ["wild", "domestic"], []}, next} = next.()
-    assert {{"testdirs", ["dogs", "cats"], []}, next} = next.()
+    assert {{"testdirs", ["dogs", "cats", "felines"], []}, next} = next.()
     assert :done = next.()
   end
 
   test "walks breadth first if option specified" do
-    assert {{"testdirs", ["dogs", "cats"], []}, next} = Dirwalk.walk(@testdir, depth_first: false)
+    assert {{"testdirs", ["dogs", "cats", "felines"], []}, next} =
+             Dirwalk.walk(@testdir, depth_first: false)
 
     assert {{"testdirs/dogs", ["wild", "domestic"], []}, next} = next.()
     assert {{"testdirs/cats", ["wild", "domestic"], []}, next} = next.()
@@ -61,5 +62,23 @@ defmodule DirwalkTest do
     )
 
     assert Agent.get(agent, & &1) == ["non_existent_dir: enoent"]
+  end
+
+  test "can follow symlinks" do
+    assert {{"testdirs", ["dogs", "cats", "felines"], []}, next} =
+             Dirwalk.walk(@testdir, follow_symlinks: true)
+
+    assert {{"testdirs/dogs", ["wild", "domestic"], []}, next} = next.()
+    assert {{"testdirs/dogs/wild", [], ["coyote.txt", "wolf.txt"]}, next} = next.()
+    assert {{"testdirs/dogs/domestic", [], ["dog.txt"]}, next} = next.()
+    assert {{"testdirs/cats", ["wild", "domestic"], []}, next} = next.()
+    assert {{"testdirs/cats/wild", [], ["tiger.txt", "lion.txt"]}, next} = next.()
+    assert {{"testdirs/cats/domestic", [], ["cat.txt"]}, next} = next.()
+
+    # Symlink followed
+    assert {{"testdirs/felines", ["wild", "domestic"], []}, next} = next.()
+    assert {{"testdirs/felines/wild", [], ["tiger.txt", "lion.txt"]}, next} = next.()
+    assert {{"testdirs/felines/domestic", [], ["cat.txt"]}, next} = next.()
+    assert :done = next.()
   end
 end
