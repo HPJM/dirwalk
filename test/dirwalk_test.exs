@@ -2,8 +2,10 @@ defmodule DirwalkTest do
   use ExUnit.Case
   doctest Dirwalk
 
-  test "walks depth first" do
-    assert {{"testdirs", ["dogs", "cats"], []}, next} = Dirwalk.walk("testdirs")
+  @testdir "testdirs"
+
+  test "walks depth first, top-down by default" do
+    assert {{"testdirs", ["dogs", "cats"], []}, next} = Dirwalk.walk(@testdir)
     assert {{"testdirs/dogs", ["wild", "domestic"], []}, next} = next.()
     assert {{"testdirs/dogs/wild", [], ["coyote.txt", "wolf.txt"]}, next} = next.()
     assert {{"testdirs/dogs/domestic", [], ["dog.txt"]}, next} = next.()
@@ -15,7 +17,7 @@ defmodule DirwalkTest do
 
   test "walks bottom-up if option given" do
     assert {{"testdirs/dogs/wild", [], ["coyote.txt", "wolf.txt"]}, next} =
-             Dirwalk.walk("testdirs", topdown: false)
+             Dirwalk.walk(@testdir, top_down: false)
 
     assert {{"testdirs/dogs/domestic", [], ["dog.txt"]}, next} = next.()
     assert {{"testdirs/dogs", ["wild", "domestic"], []}, next} = next.()
@@ -26,8 +28,9 @@ defmodule DirwalkTest do
     assert :done = next.()
   end
 
-  test "walks breadth first" do
-    assert {{"testdirs", ["dogs", "cats"], []}, next} = Dirwalk.walk("testdirs", search: :breadth)
+  test "walks breadth first if option specified" do
+    assert {{"testdirs", ["dogs", "cats"], []}, next} = Dirwalk.walk(@testdir, depth_first: false)
+
     assert {{"testdirs/dogs", ["wild", "domestic"], []}, next} = next.()
     assert {{"testdirs/cats", ["wild", "domestic"], []}, next} = next.()
     assert {{"testdirs/dogs/wild", [], ["coyote.txt", "wolf.txt"]}, next} = next.()
@@ -39,10 +42,10 @@ defmodule DirwalkTest do
 
   test "by default ignores errors" do
     assert :done = Dirwalk.walk("non_existent_dir")
-    assert :done = Dirwalk.walk("non_existent_dir", topdown: false)
+    assert :done = Dirwalk.walk("non_existent_dir", top_down: false)
   end
 
-  test "invokes on_error/1 with any errors encountered" do
+  test "invokes on_error/1 if passed with any errors encountered" do
     {:ok, agent} = Agent.start(fn -> [] end)
 
     Dirwalk.walk("non_existent_dir", on_error: fn error -> Agent.update(agent, &[error | &1]) end)
@@ -50,7 +53,7 @@ defmodule DirwalkTest do
     assert Agent.get(agent, & &1) == [{"non_existent_dir", :enoent}]
   end
 
-  test "invokes on_error/2 with any errors encountered" do
+  test "invokes on_error/2 if passed with any errors encountered" do
     {:ok, agent} = Agent.start(fn -> [] end)
 
     Dirwalk.walk("non_existent_dir",
