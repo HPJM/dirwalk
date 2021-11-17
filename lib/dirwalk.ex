@@ -1,6 +1,42 @@
 defmodule Dirwalk do
   @moduledoc """
-  A simple module to help traverse directories. Interface inspired by Python's `os.walk`.
+  A simple-to-use module to help traverse directories. Interface inspired by Python's `os.walk`.
+
+  `Dirwalk` enables you to walk directories lazily or greedily. Lazy traversal means that the minimum
+  amount of work is needed to get the next result, and each next step has to be done explicitly.
+
+  You must provide a startpoint, which is a path on the filesystem. `Dirwalk` will then
+  recursively walk acorss and down subdirectories.
+
+  Symlink and error handling are included. See `Dirwalk.walk` options for alternatives to the
+  top-down, depth-first walk done by default.
+
+  The data structure used is a triple / 3-tuple consisting of the current directory, and the
+  subdirectories and files in that directory.
+
+  In the most raw form, you can use `Dirwalk.walk`, and manually call the continuation function
+  when you want to consume the next result. This gives you control of how much to do.
+
+  ## Using `walk` (see `testdirs` structure in this repo as an example)
+
+      iex> {{"testdirs", ["dogs", "cats", "felines"], []}, next} = Dirwalk.walk("testdirs")
+      iex> {{"testdirs/dogs", ["wild", "domestic"], []}, _next} = next.()
+
+  You can also use the struct based approach to simplify this a bit.
+
+  ## Using helper functions
+
+      iex> dirwalk = Dirwalk.new("testdirs") |> Dirwalk.next()
+      iex> Dirwalk.results(dirwalk)
+      [{"testdirs", ["dogs", "cats", "felines"], []}]
+
+  But because `Dirwalk` implements `Enumerable`, it is probably easier to use `Enum` functions.
+  This allows for greedy traversal too.
+
+  ## Using `Enum` functions
+
+      iex> Dirwalk.new("testdirs") |> Enum.take(1)
+      [{"testdirs", ["dogs", "cats", "felines"], []}]
   """
 
   @type path :: String.t()
@@ -8,6 +44,74 @@ defmodule Dirwalk do
   @type files :: [String.t()]
   @type dirlist :: {path, dirs, files}
   @type opts :: []
+
+  @type t :: %__MODULE__{}
+
+  defstruct [:next, results: [], done: false]
+
+  @doc """
+  Initialises a `Dirwalk` struct. Options are passed through and are the same as in `Dirwalk.walk`
+  """
+  @spec new(binary, list) :: Dirwalk.t()
+  def new(root, opts \\ []) when is_binary(root) do
+    %Dirwalk{next: fn -> Dirwalk.walk(root, opts) end}
+  end
+
+  @doc """
+  Does the next traversal in the file tree. Stores result and handles completion
+  """
+  @spec next(Dirwalk.t()) :: Dirwalk.t()
+  def next(%Dirwalk{next: next, results: results} = dirwalk) do
+    case next.() do
+      :done -> %Dirwalk{dirwalk | done: true}
+      {dirlist, next} -> %Dirwalk{dirwalk | next: next, results: [dirlist | results]}
+    end
+  end
+
+  @doc """
+  Returns whether traversal has finished.
+  """
+  @spec done?(Dirwalk.t()) :: boolean
+  def done?(%Dirwalk{done: done}), do: done
+
+  @doc """
+  Returns accumulated results from the traversal.
+  """
+  @spec results(Dirwalk.t()) :: [dirlist]
+  def results(%Dirwalk{results: results, done: true}), do: results
+  def results(%Dirwalk{results: results}), do: Enum.reverse(results)
+
+  @doc """
+  Returns last accumulated result.
+  """
+  @spec last(Dirwalk.t()) :: nil | :done | dirlist
+  def last(%Dirwalk{results: []}), do: nil
+  def last(%Dirwalk{results: [head | _tail]}), do: head
+
+  defimpl Enumerable, for: __MODULE__ do
+    def count(_dirwalk), do: {:error, __MODULE__}
+
+    def member?(_dirwalk, _value), do: {:error, __MODULE__}
+
+    def slice(_dirwalk), do: {:error, __MODULE__}
+
+    def reduce(_dirwalk, {:halt, acc}, _fun), do: {:halted, acc}
+
+    def reduce(%Dirwalk{} = dirwalk, {:suspend, acc}, fun) do
+      {:suspended, acc, &reduce(dirwalk, &1, fun)}
+    end
+
+    def reduce(%Dirwalk{} = dirwalk, {:cont, acc}, fun) do
+      dirwalk = Dirwalk.next(dirwalk)
+
+      if Dirwalk.done?(dirwalk) do
+        {:done, acc}
+      else
+        last = Dirwalk.last(dirwalk)
+        reduce(dirwalk, fun.(last, acc), fun)
+      end
+    end
+  end
 
   @doc """
   `walk` takes a directory path and lazily and recursively traverses directories from that root.
