@@ -6,7 +6,7 @@ defmodule Dirwalk do
   amount of work is needed to get the next result, and each next step has to be done explicitly.
 
   You must provide a startpoint, which is a path on the filesystem. `Dirwalk` will then
-  recursively walk acorss and down subdirectories.
+  recursively walk across and down subdirectories.
 
   Symlink and error handling are included. See `Dirwalk.walk` options for alternatives to the
   top-down, depth-first walk done by default.
