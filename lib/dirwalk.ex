@@ -150,59 +150,42 @@ defmodule Dirwalk do
   @spec walk(path, opts) :: {dirlist, (() -> any())} | :done
   def walk(path, opts \\ []) do
     on_error = Keyword.get(opts, :on_error, & &1)
-    depth_first = Keyword.get(opts, :depth_first, true)
-    top_down = Keyword.get(opts, :top_down, true)
-    follow_symlinks = Keyword.get(opts, :follow_symlinks, false)
+    depth_first = !!Keyword.get(opts, :depth_first, true)
+    top_down = !!Keyword.get(opts, :top_down, true)
+    follow_symlinks = !!Keyword.get(opts, :follow_symlinks, false)
 
-    if top_down do
-      do_walk([path], on_error, follow_symlinks, depth_first)
-    else
-      do_walk_bottom_up([path], on_error, follow_symlinks, fn -> :done end)
-    end
+    opts = %{
+      top_down: top_down,
+      depth_first: depth_first,
+      follow_symlinks: follow_symlinks,
+      on_error: on_error
+    }
+
+    do_walk([path], opts, fn -> :done end)
   end
 
-  defp do_walk_bottom_up([], _on_error, _follow_symlinks, next), do: next.()
+  defp do_walk([], _opts, next), do: next.()
 
-  defp do_walk_bottom_up([path | remaining_dirs], on_error, follow_symlinks, next) do
-    if should_list?(path, follow_symlinks) do
-      case get_dirs_and_files(path, on_error) do
-        {:ok, {dirs, files}} ->
-          dirs
-          |> build_child_paths(path)
-          |> do_walk_bottom_up(on_error, follow_symlinks, fn ->
-            {{path, dirs, files},
-             fn ->
-               do_walk_bottom_up(remaining_dirs, on_error, follow_symlinks, next)
-             end}
-          end)
-
-        :error ->
-          do_walk_bottom_up(remaining_dirs, on_error, follow_symlinks, next)
-      end
-    else
-      do_walk_bottom_up(remaining_dirs, on_error, follow_symlinks, next)
-    end
-  end
-
-  defp do_walk([], _on_error, _follow_symlinks, _depth_first), do: :done
-
-  defp do_walk([path | remaining_dirs], on_error, follow_symlinks, depth_first) do
+  defp do_walk(
+         [path | remaining_dirs],
+         %{on_error: on_error, follow_symlinks: follow_symlinks} = opts,
+         next
+       ) do
     if should_list?(path, follow_symlinks) do
       case get_dirs_and_files(path, on_error) do
         {:ok, {dirs, files}} ->
           child_dirs = build_child_paths(dirs, path)
 
-          remaining_dirs =
-            if depth_first, do: child_dirs ++ remaining_dirs, else: remaining_dirs ++ child_dirs
+          {next_dirs, next_fun} =
+            prepare_continuation({path, dirs, files}, child_dirs, remaining_dirs, opts, next)
 
-          {{path, dirs, files},
-           fn -> do_walk(remaining_dirs, on_error, follow_symlinks, depth_first) end}
+          do_walk(next_dirs, opts, next_fun)
 
         :error ->
-          do_walk(remaining_dirs, on_error, follow_symlinks, depth_first)
+          do_walk(remaining_dirs, opts, next)
       end
     else
-      do_walk(remaining_dirs, on_error, follow_symlinks, depth_first)
+      do_walk(remaining_dirs, opts, next)
     end
   end
 
@@ -233,6 +216,47 @@ defmodule Dirwalk do
   end
 
   defp build_child_paths(dirs, path), do: Enum.map(dirs, &Path.join(path, &1))
+
+  defp prepare_continuation(
+         dirlist,
+         child_dirs,
+         remaining_dirs,
+         %{top_down: true, depth_first: true} = opts,
+         next
+       ) do
+    next_fun = fn ->
+      {dirlist, fn -> do_walk(child_dirs ++ remaining_dirs, opts, next) end}
+    end
+
+    {[], next_fun}
+  end
+
+  defp prepare_continuation(
+         dirlist,
+         child_dirs,
+         remaining_dirs,
+         %{top_down: true, depth_first: false} = opts,
+         next
+       ) do
+    next_fun = fn ->
+      {dirlist, fn -> do_walk(remaining_dirs ++ child_dirs, opts, next) end}
+    end
+
+    {[], next_fun}
+  end
+
+  defp prepare_continuation(dirlist, child_dirs, remaining_dirs, %{top_down: false} = opts, next) do
+    next_fun = fn ->
+      # Recurse on children dirs first, before yielding this directory's results
+      # and only then recurse on siblings
+      {dirlist,
+       fn ->
+         do_walk(remaining_dirs, opts, next)
+       end}
+    end
+
+    {child_dirs, next_fun}
+  end
 
   defp call_on_error(on_error, path, reason) when is_function(on_error, 2) do
     on_error.(path, reason)
