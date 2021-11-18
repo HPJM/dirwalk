@@ -78,7 +78,6 @@ defmodule Dirwalk do
   Returns accumulated results from the traversal.
   """
   @spec results(Dirwalk.t()) :: [dirlist]
-  def results(%Dirwalk{results: results, done: true}), do: results
   def results(%Dirwalk{results: results}), do: Enum.reverse(results)
 
   @doc """
