@@ -148,7 +148,7 @@ defmodule Dirwalk do
   """
   @spec walk(path, opts) :: {dirlist, (() -> any())} | :done
   def walk(path, opts \\ []) do
-    on_error = Keyword.get(opts, :on_error, & &1)
+    on_error = Keyword.get(opts, :on_error)
     depth_first = !!Keyword.get(opts, :depth_first, true)
     top_down = !!Keyword.get(opts, :top_down, true)
     follow_symlinks = !!Keyword.get(opts, :follow_symlinks, false)
@@ -197,7 +197,7 @@ defmodule Dirwalk do
         {:ok, results}
 
       {:error, reason} ->
-        call_on_error(on_error, path, reason)
+        maybe_call_on_error(on_error, path, reason)
         :error
     end
   end
@@ -223,6 +223,7 @@ defmodule Dirwalk do
          %{top_down: true, depth_first: true} = opts,
          next
        ) do
+    # Top-down: yield this directory listing first, before recursing on children and siblings
     next_fun = fn ->
       {dirlist, fn -> do_walk(child_dirs ++ remaining_dirs, opts, next) end}
     end
@@ -245,9 +246,9 @@ defmodule Dirwalk do
   end
 
   defp prepare_continuation(dirlist, child_dirs, remaining_dirs, %{top_down: false} = opts, next) do
+    # Bottom-up: recurse on children dirs first, before yielding this directory's results
+    # and only then recurse on siblings
     next_fun = fn ->
-      # Recurse on children dirs first, before yielding this directory's results
-      # and only then recurse on siblings
       {dirlist,
        fn ->
          do_walk(remaining_dirs, opts, next)
@@ -257,13 +258,15 @@ defmodule Dirwalk do
     {child_dirs, next_fun}
   end
 
-  defp call_on_error(on_error, path, reason) when is_function(on_error, 2) do
+  defp maybe_call_on_error(on_error, path, reason) when is_function(on_error, 2) do
     on_error.(path, reason)
   end
 
-  defp call_on_error(on_error, path, reason) do
+  defp maybe_call_on_error(on_error, path, reason) when is_function(on_error, 1) do
     on_error.({path, reason})
   end
+
+  defp maybe_call_on_error(_on_error, _path, _reason), do: nil
 
   defp symlink?(path) do
     case File.lstat(path) do
